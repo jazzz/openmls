@@ -48,4 +48,34 @@ impl MlsGroup {
             self.version(),
         ))
     }
+
+    /// Creates an application message. Returns
+    /// `CreateMessageError::MlsGroupStateError::UseAfterEviction` if the member
+    /// is no longer part of the group. Does not return
+    /// `CreateMessageError::MlsGroupStateError::PendingProposal` if pending
+    /// proposals exist. This function does not block a client from sending content
+    /// while a proposal is inflight. Developers must handle the risk to confidentiality
+    /// themselves.
+    // #[cfg(feature = "demls-extension-inflight-proposals")]
+    pub fn create_message_bypassing_proposal_safety<P: OpenMlsProvider>(
+        &mut self,
+        provider: &P,
+        signer: &impl Signer,
+        msg: &[u8],
+    ) -> Result<MlsMessageOut, errors::CreateBypassMessageError<P::StorageError>> {
+        let all: Vec<QueuedProposal> = self.pending_proposals().cloned().collect();
+
+        for p in &all {
+            self.remove_pending_proposal(provider.storage(), &p.proposal_reference())?;
+        }
+
+        // CRITICAL: A failure in this section results in a forked group.
+        let result = self.create_message(provider, signer, msg);
+        for p in all {
+            self.store_pending_proposal(provider.storage(), p)
+                .map_err(errors::CreateBypassMessageError::StorageError)?; // always restore
+        }
+        // CRITICAL: End
+        Ok(result?)
+    }
 }

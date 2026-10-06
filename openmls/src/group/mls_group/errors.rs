@@ -175,6 +175,21 @@ pub enum CreateMessageError {
     GroupStateError(#[from] MlsGroupStateError),
 }
 
+/// Create bypass message error
+// #[cfg(feature = "demls-extension-inflight-proposals")]
+#[derive(Error, Debug, PartialEq, Clone)]
+pub enum CreateBypassMessageError<StorageError> {
+    /// See [`LibraryError`] for more details.
+    #[error(transparent)]
+    CreateMessageError(#[from] CreateMessageError),
+    /// Error removing a pending proposal before creating the message.
+    #[error(transparent)]
+    RemoveProposalError(#[from] RemoveProposalError<StorageError>),
+    /// Error restoring a pending proposal to storage.
+    #[error("error writing proposal to storage")]
+    StorageError(StorageError),
+}
+
 /// Add members error
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum AddMembersError<StorageError> {
